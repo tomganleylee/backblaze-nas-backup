@@ -18,7 +18,10 @@
     - Admin privileges
 
 .EXAMPLE
-    .\backblaze-smb-backup-setup.ps1 -SMBPath "\\192.168.3.188\share" -DriveLetter "X" -Username "BackblazeUser" -Password "YourSecurePassword123!"
+    .\backblaze-smb-backup-setup.ps1 -SMBPath "\\192.168.3.188\share" -DriveLetter "X" -Password "YourSecurePassword123!"
+
+.EXAMPLE
+    .\backblaze-smb-backup-setup.ps1 -SMBPath "\\192.168.3.188\share" -DriveLetter "X" -Password "YourSecurePassword123!" -NASUser "tom" -NASPassword "naspass123"
 #>
 
 param(
@@ -33,6 +36,12 @@ param(
 
     [Parameter(Mandatory=$true)]
     [string]$Password,
+
+    [Parameter(Mandatory=$false)]
+    [string]$NASUser,
+
+    [Parameter(Mandatory=$false)]
+    [string]$NASPassword,
 
     [Parameter(Mandatory=$false)]
     [string]$DokanPath = "C:\Program Files\Dokan\Dokan Library-2.3.1\sample\mirror\mirror.exe"
@@ -183,7 +192,12 @@ if (-not (Test-Path $batchDir)) {
 }
 $batchFile = "$batchDir\mount-$DriveLetter.bat"
 # /g flag makes the mount global (visible to all users)
-$batchContent = "@echo off`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter /g"
+# Include net use with credentials if NAS credentials were provided
+if ($NASUser -and $NASPassword) {
+    $batchContent = "@echo off`r`nnet use `"$SMBPath`" /user:$NASUser $NASPassword`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter /g"
+} else {
+    $batchContent = "@echo off`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter /g"
+}
 Set-Content -Path $batchFile -Value $batchContent -Encoding ASCII
 Write-Host "[OK] Created batch file: $batchFile" -ForegroundColor Green
 

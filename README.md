@@ -35,6 +35,12 @@ Use **[Dokan](https://github.com/dokan-dev/dokany)** (a Windows filesystem drive
 powershell -ExecutionPolicy Bypass -File .\backblaze-smb-backup-setup.ps1 -SMBPath "\\YOUR-NAS-IP\sharename" -DriveLetter "X" -Password "YourSecurePassword123!"
 ```
 
+If your NAS requires authentication, add the NAS credentials:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\backblaze-smb-backup-setup.ps1 -SMBPath "\\YOUR-NAS-IP\sharename" -DriveLetter "X" -Password "YourSecurePassword123!" -NASUser "nasuser" -NASPassword "naspassword"
+```
+
 > **Note:** If you get an execution policy error, use the command above with `-ExecutionPolicy Bypass`, or run `Unblock-File .\backblaze-smb-backup-setup.ps1` first.
 
 The script will:
