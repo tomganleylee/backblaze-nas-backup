@@ -176,10 +176,17 @@ if ($existingTask) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
-# Create the scheduled task using schtasks.exe for better compatibility
-# The /TR argument needs special quoting: outer quotes for schtasks, inner escaped quotes for paths with spaces
-$taskCommand = "'`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter'"
-$schtasksResult = cmd /c "schtasks.exe /Create /TN `"$taskName`" /TR $taskCommand /SC ONSTART /RU `"$Username`" /RP `"$Password`" /RL HIGHEST /F" 2>&1
+# Create the scheduled task using a batch file wrapper for reliable path handling
+$batchDir = "C:\ProgramData\DokanMount"
+if (-not (Test-Path $batchDir)) {
+    New-Item -ItemType Directory -Path $batchDir | Out-Null
+}
+$batchFile = "$batchDir\mount-$DriveLetter.bat"
+$batchContent = "@echo off`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter"
+Set-Content -Path $batchFile -Value $batchContent -Encoding ASCII
+Write-Host "[OK] Created batch file: $batchFile" -ForegroundColor Green
+
+$schtasksResult = & schtasks.exe /Create /TN "$taskName" /TR "`"$batchFile`"" /SC ONSTART /RU "$Username" /RP "$Password" /RL HIGHEST /F 2>&1
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Failed to create scheduled task: $schtasksResult" -ForegroundColor Red
