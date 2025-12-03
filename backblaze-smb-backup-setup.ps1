@@ -182,7 +182,8 @@ if (-not (Test-Path $batchDir)) {
     New-Item -ItemType Directory -Path $batchDir | Out-Null
 }
 $batchFile = "$batchDir\mount-$DriveLetter.bat"
-$batchContent = "@echo off`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter"
+# /g flag makes the mount global (visible to all users)
+$batchContent = "@echo off`r`n`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter /g"
 Set-Content -Path $batchFile -Value $batchContent -Encoding ASCII
 Write-Host "[OK] Created batch file: $batchFile" -ForegroundColor Green
 
