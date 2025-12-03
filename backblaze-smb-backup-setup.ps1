@@ -7,8 +7,9 @@
     Backblaze Personal runs as SYSTEM by default, which cannot create files on SMB shares
     (error 1307 - invalid owner). This script:
     1. Creates a local user account for Backblaze
-    2. Configures the Backblaze service to run under that account
-    3. Creates a scheduled task to mount the SMB share via Dokan's mirror.exe
+    2. Grants "Log on as a service" right to that account
+    3. Configures the Backblaze service to run under that account
+    4. Creates a scheduled task to mount the SMB share via Dokan's mirror.exe
 
 .NOTES
     Prerequisites:
@@ -82,6 +83,57 @@ if ($userExists) {
     }
 }
 
+# Step 1b: Grant "Log on as a service" right
+Write-Host ""
+Write-Host "Step 1b: Granting 'Log on as a service' right to '$Username'..." -ForegroundColor Cyan
+
+try {
+    $tempFile = [System.IO.Path]::GetTempFileName()
+    $tempDb = [System.IO.Path]::GetTempFileName()
+
+    # Export current security policy
+    secedit /export /cfg $tempFile | Out-Null
+
+    # Get user SID
+    $userSid = (New-Object System.Security.Principal.NTAccount($Username)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+
+    # Read config and add user to SeServiceLogonRight
+    $config = Get-Content $tempFile
+    $newConfig = @()
+    $found = $false
+
+    foreach ($line in $config) {
+        if ($line -match "^SeServiceLogonRight") {
+            $found = $true
+            if ($line -notmatch $userSid) {
+                $line = $line + ",*$userSid"
+            }
+        }
+        $newConfig += $line
+    }
+
+    # If SeServiceLogonRight wasn't found, add it
+    if (-not $found) {
+        $newConfig += "SeServiceLogonRight = *$userSid"
+    }
+
+    Set-Content $tempFile $newConfig
+
+    # Apply the new policy
+    secedit /configure /db $tempDb /cfg $tempFile /areas USER_RIGHTS | Out-Null
+
+    # Cleanup
+    Remove-Item $tempFile -ErrorAction SilentlyContinue
+    Remove-Item $tempDb -ErrorAction SilentlyContinue
+    Remove-Item "$tempDb.log" -ErrorAction SilentlyContinue
+    Remove-Item "$tempDb.jfm" -ErrorAction SilentlyContinue
+
+    Write-Host "[OK] Granted 'Log on as a service' right to $Username" -ForegroundColor Green
+} catch {
+    Write-Host "WARNING: Could not automatically grant 'Log on as a service' right: $_" -ForegroundColor Yellow
+    Write-Host "You may need to manually add this in secpol.msc > Local Policies > User Rights Assignment" -ForegroundColor Yellow
+}
+
 # Step 2: Configure Backblaze service
 Write-Host ""
 Write-Host "Step 2: Configuring Backblaze service to run as '$Username'..." -ForegroundColor Cyan
@@ -124,13 +176,14 @@ if ($existingTask) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
-# Create the scheduled task
-$action = New-ScheduledTaskAction -Execute $DokanPath -Argument "/r $SMBPath /l $DriveLetter"
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId $Username -LogonType Password -RunLevel Highest
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+# Create the scheduled task using schtasks.exe for better compatibility
+$taskArgs = "/r $SMBPath /l $DriveLetter"
+$schtasksResult = & schtasks.exe /Create /TN $taskName /TR "`"$DokanPath`" $taskArgs" /SC ONSTART /RU $Username /RP $Password /RL HIGHEST /F 2>&1
 
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Password $Password | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Failed to create scheduled task: $schtasksResult" -ForegroundColor Red
+    exit 1
+}
 Write-Host "[OK] Created scheduled task: $taskName" -ForegroundColor Green
 
 # Step 4: Start the mount now
@@ -143,7 +196,7 @@ if ($driveExists) {
     Write-Host "[OK] Drive $DriveLetter`: is already mounted" -ForegroundColor Green
 } else {
     Write-Host "Starting scheduled task to mount drive..." -ForegroundColor Yellow
-    Start-ScheduledTask -TaskName $taskName
+    & schtasks.exe /Run /TN $taskName | Out-Null
     Start-Sleep -Seconds 3
 
     $driveExists = Get-PSDrive -Name $DriveLetter -ErrorAction SilentlyContinue
@@ -174,6 +227,6 @@ Write-Host "  3. Check the box next to drive $DriveLetter`:" -ForegroundColor Wh
 Write-Host "  4. Wait for initial scan to complete" -ForegroundColor White
 Write-Host ""
 Write-Host "Troubleshooting:" -ForegroundColor Yellow
-Write-Host "  - If drive doesn't appear, run: Start-ScheduledTask -TaskName '$taskName'" -ForegroundColor White
+Write-Host "  - If drive doesn't appear, run: schtasks /Run /TN '$taskName'" -ForegroundColor White
 Write-Host "  - Check Dokan logs in Event Viewer > Applications" -ForegroundColor White
 Write-Host "  - Verify SMB share is accessible from this machine" -ForegroundColor White
