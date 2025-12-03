@@ -177,8 +177,9 @@ if ($existingTask) {
 }
 
 # Create the scheduled task using schtasks.exe for better compatibility
-$taskCommand = "`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter"
-$schtasksResult = & schtasks.exe /Create /TN $taskName /TR $taskCommand /SC ONSTART /RU $Username /RP $Password /RL HIGHEST /F 2>&1
+# The /TR argument needs special quoting: outer quotes for schtasks, inner escaped quotes for paths with spaces
+$taskCommand = "'`"$DokanPath`" /r `"$SMBPath`" /l $DriveLetter'"
+$schtasksResult = cmd /c "schtasks.exe /Create /TN `"$taskName`" /TR $taskCommand /SC ONSTART /RU `"$Username`" /RP `"$Password`" /RL HIGHEST /F" 2>&1
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Failed to create scheduled task: $schtasksResult" -ForegroundColor Red
