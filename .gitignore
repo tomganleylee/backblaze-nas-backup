@@ -1,0 +1,7 @@
+# Local helper scripts
+find-service.ps1
+check-drives.ps1
+
+# Logs
+*.log
+log.md
