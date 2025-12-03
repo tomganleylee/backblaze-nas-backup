@@ -32,8 +32,10 @@ Use **[Dokan](https://github.com/dokan-dev/dokany)** (a Windows filesystem drive
 3. Execute:
 
 ```powershell
-.\backblaze-smb-backup-setup.ps1 -SMBPath "\\YOUR-NAS-IP\sharename" -DriveLetter "X" -Password "YourSecurePassword123!"
+powershell -ExecutionPolicy Bypass -File .\backblaze-smb-backup-setup.ps1 -SMBPath "\\YOUR-NAS-IP\sharename" -DriveLetter "X" -Password "YourSecurePassword123!"
 ```
+
+> **Note:** If you get an execution policy error, use the command above with `-ExecutionPolicy Bypass`, or run `Unblock-File .\backblaze-smb-backup-setup.ps1` first.
 
 The script will:
 - Create a local user account (`BackblazeUser`)
